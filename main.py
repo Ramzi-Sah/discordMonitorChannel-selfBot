@@ -1,9 +1,10 @@
+
+# TODO: handle replys
 # dont use discord.py use the fork `pip install discord.py-self`
 
 discord_token = '' # do not expose the TOKEN
 channelIds_forward = [] # never put this in the channelIds_listen List
 channelIds_listen = []
-
 
 import discord # use the discord.py-self verrsion !
 
@@ -16,14 +17,43 @@ class MyClient(discord.Client):
         if str(message.channel.id) not in channelIds_listen:
             return
 
+        # check if is reply
+        replyMessageId = ""
+        if message.reference is not None :
+            # get reply to message
+            replyMessageId = str(message.reference.message_id) 
+
         # create embed
         embed = discord.Embed(title="redirected from `" + message.channel.name + "`", description=str(message.content), color=0x00ff00)
         embed.set_author(name=str(message.author), icon_url=message.author.avatar_url)
         embed.set_footer(text="# " + str(message.id)) # set message id as footer 
 
         for channelId in channelIds_forward:
-            channel = self.get_channel(int(channelId))
-            await channel.send(embed=embed)
+            channel_forward = self.get_channel(int(channelId))
+
+            # check if is reply
+            if replyMessageId == "":
+                # is not response just send message
+                await channel_forward.send(embed=embed)
+            else :
+                # is reply, search for message
+                foundMessageToReply = False
+                embed.set_footer(text="# " + str(message.id) + " replyed to # " + replyMessageId) # set reply message
+                
+                messages_forward = await channel_forward.history(limit=50).flatten()
+                for messageToReply in messages_forward:
+                    for embedForward in messageToReply.embeds:
+                        # if has embed no footer skip message
+                        if embed.footer.text is discord.Embed.Empty:
+                            continue
+
+                        if embedForward.footer.text.split()[1].strip() == replyMessageId:
+                            foundMessageToReply = True
+                            await messageToReply.reply(embed=embed)
+
+                # if didn't find messages_forward to reply to just send message (don't reply)
+                if not foundMessageToReply:
+                    await channel_forward.send(embed=embed)
 
     async def on_raw_message_edit(self, rawMessageUpdateEvent):
         # check if message channel is monitored
